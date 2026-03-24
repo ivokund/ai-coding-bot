@@ -38,7 +38,7 @@ def invite_already_generated_today():
 def create_invite():
     resp = requests.post(
         f"{DISCORD_API}/channels/{WELCOME_CHANNEL_ID}/invites",
-        json={"max_uses": 1, "max_age": 604800, "unique": True},
+        json={"max_uses": 1, "max_age": 86400, "unique": True},
         headers=HEADERS,
     )
     resp.raise_for_status()
@@ -83,7 +83,7 @@ def handle_invite(interaction):
     code = create_invite()
     username = interaction["member"]["user"]["global_name"] or interaction["member"]["user"]["username"]
     post_log_message(username, channel_id)
-    edit_followup(token, f"Here's your invite link: https://discord.gg/{code} (single-use, expires in 7 days)")
+    edit_followup(token, f"Here's your invite link: https://discord.gg/{code} (single-use, expires in 24h)")
 
 
 @app.route("/interactions", methods=["POST"])
