@@ -1,0 +1,35 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push
+        run: |
+          gcloud auth configure-docker europe-north1-docker.pkg.dev --quiet
+          docker build -t europe-north1-docker.pkg.dev/ai-coding-bot/ai-coding-bot/bot .
+          docker push europe-north1-docker.pkg.dev/ai-coding-bot/ai-coding-bot/bot
+
+      - name: Deploy
+        run: |
+          gcloud run deploy ai-coding-bot \
+            --image=europe-north1-docker.pkg.dev/ai-coding-bot/ai-coding-bot/bot \
+            --region=europe-north1 \
+            --project=ai-coding-bot \
+            --min-instances=0 \
+            --max-instances=1 \
+            --allow-unauthenticated \
+            --set-env-vars="DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }},DISCORD_APP_ID=${{ secrets.DISCORD_APP_ID }},DISCORD_PUBLIC_KEY=${{ secrets.DISCORD_PUBLIC_KEY }},INVITE_CHANNEL_ID=${{ secrets.INVITE_CHANNEL_ID }},WELCOME_CHANNEL_ID=${{ secrets.WELCOME_CHANNEL_ID }},GUILD_ID=${{ secrets.GUILD_ID }}"
