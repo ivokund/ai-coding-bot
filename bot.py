@@ -1,4 +1,5 @@
 import os
+import threading
 from datetime import datetime, timezone
 
 import requests
@@ -17,8 +18,11 @@ DISCORD_API = "https://discord.com/api/v10"
 HEADERS = {"Authorization": f"Bot {BOT_TOKEN}"}
 
 
-def ephemeral(content):
-    return jsonify({"type": InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, "data": {"content": content, "flags": 64}})
+def edit_followup(interaction_token, content):
+    requests.patch(
+        f"{DISCORD_API}/webhooks/{APP_ID}/{interaction_token}/messages/@original",
+        json={"content": content},
+    )
 
 
 def invite_already_generated_today():
@@ -42,7 +46,6 @@ def create_invite():
 
 
 def post_log_message(username, channel_id):
-    # Count this user's invites this month
     resp = requests.get(f"{DISCORD_API}/channels/{channel_id}/messages?limit=100", headers=HEADERS)
     resp.raise_for_status()
     now = datetime.now(timezone.utc)
@@ -65,6 +68,24 @@ def post_log_message(username, channel_id):
     )
 
 
+def handle_invite(interaction):
+    channel_id = interaction["channel_id"]
+    token = interaction["token"]
+
+    if channel_id != INVITE_CHANNEL_ID:
+        edit_followup(token, "Use this command in #invite")
+        return
+
+    if invite_already_generated_today():
+        edit_followup(token, "An invite was already generated today. Try again tomorrow!")
+        return
+
+    code = create_invite()
+    username = interaction["member"]["user"]["global_name"] or interaction["member"]["user"]["username"]
+    post_log_message(username, channel_id)
+    edit_followup(token, f"Here's your invite link: https://discord.gg/{code} (single-use, expires in 7 days)")
+
+
 @app.route("/interactions", methods=["POST"])
 @verify_key_decorator(PUBLIC_KEY)
 def interactions():
@@ -74,17 +95,7 @@ def interactions():
         return jsonify({"type": InteractionResponseType.PONG})
 
     if interaction["type"] == InteractionType.APPLICATION_COMMAND and interaction["data"]["name"] == "invite":
-        channel_id = interaction["channel_id"]
-        if channel_id != INVITE_CHANNEL_ID:
-            return ephemeral("Use this command in #invite")
-
-        if invite_already_generated_today():
-            return ephemeral("An invite was already generated today. Try again tomorrow!")
-
-        code = create_invite()
-        username = interaction["member"]["user"]["global_name"] or interaction["member"]["user"]["username"]
-        post_log_message(username, channel_id)
-
-        return ephemeral(f"Here's your invite link: https://discord.gg/{code} (single-use, expires in 7 days)")
+        threading.Thread(target=handle_invite, args=(interaction,)).start()
+        return jsonify({"type": 5, "data": {"flags": 64}})
 
     return jsonify({"type": InteractionResponseType.PONG})
