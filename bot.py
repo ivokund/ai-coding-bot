@@ -54,7 +54,6 @@ def post_log_message(username, channel_id):
         if (
             msg["author"]["id"] == APP_ID
             and msg["timestamp"][:7] == now.strftime("%Y-%m")
-            and f"**{username}**" in msg["content"]
         ):
             month_count += 1
 
