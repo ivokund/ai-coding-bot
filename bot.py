@@ -25,6 +25,21 @@ def edit_followup(interaction_token, content):
     )
 
 
+def dm_user(user_id, content):
+    resp = requests.post(
+        f"{DISCORD_API}/users/@me/channels",
+        json={"recipient_id": user_id},
+        headers=HEADERS,
+    )
+    resp.raise_for_status()
+    dm_channel_id = resp.json()["id"]
+    requests.post(
+        f"{DISCORD_API}/channels/{dm_channel_id}/messages",
+        json={"content": content},
+        headers=HEADERS,
+    )
+
+
 def invite_already_generated_today():
     resp = requests.get(f"{DISCORD_API}/channels/{INVITE_CHANNEL_ID}/messages?limit=10", headers=HEADERS)
     resp.raise_for_status()
@@ -70,19 +85,20 @@ def post_log_message(username, channel_id):
 def handle_invite(interaction):
     channel_id = interaction["channel_id"]
     token = interaction["token"]
+    user_id = interaction["member"]["user"]["id"]
 
     if channel_id != INVITE_CHANNEL_ID:
-        edit_followup(token, "Use this command in #invite")
-        return
+        msg = "Use this command in #invite"
+    elif invite_already_generated_today():
+        msg = "An invite was already generated today. Try again tomorrow!"
+    else:
+        code = create_invite()
+        username = interaction["member"]["user"]["global_name"] or interaction["member"]["user"]["username"]
+        post_log_message(username, channel_id)
+        msg = f"Here's your invite link: https://discord.gg/{code} (single-use, expires in 24h)"
 
-    if invite_already_generated_today():
-        edit_followup(token, "An invite was already generated today. Try again tomorrow!")
-        return
-
-    code = create_invite()
-    username = interaction["member"]["user"]["global_name"] or interaction["member"]["user"]["username"]
-    post_log_message(username, channel_id)
-    edit_followup(token, f"Here's your invite link: https://discord.gg/{code} (single-use, expires in 24h)")
+    edit_followup(token, msg)
+    dm_user(user_id, msg)
 
 
 @app.route("/interactions", methods=["POST"])
